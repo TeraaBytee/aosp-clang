@@ -1,0 +1,69 @@
+name: Import aosp-clang
+
+on:
+  workflow_dispatch:
+  watch:
+    types: [started]
+
+env:
+  BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+  BRANCH: ${{ secrets.BRANCH }}
+  CHAT_ID: ${{ secrets.CHAT_ID }}
+  CLANG_LINK: ${{ secrets.CLANG_LINK }}
+  GIT_TOKEN: ${{ secrets.GIT_TOKEN }}
+  TZ: Asia/Jakarta
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+        - name: Checkout
+          uses: actions/checkout@main
+
+        - name: Start
+          run: |
+            curl -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+            -d chat_id="$CHAT_ID" \
+            -d "disable_web_page_preview=true" \
+            -d "parse_mode=html" \
+            -d text="<b>Mirror AOSP clang-$BRANCH</b>"
+            git clone https://TeraaBytee:$GIT_TOKEN@github.com/TeraaBytee/aosp-clang -b main
+        - name: Import
+          run: |
+            cd aosp-clang
+            curl -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+            -d chat_id="$CHAT_ID" \
+            -d "disable_web_page_preview=true" \
+            -d "parse_mode=html" \
+            -d text="<code>download clang . . .</code>"
+            rm -rf *
+            wget $CLANG_LINK
+            curl -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+            -d chat_id="$CHAT_ID" \
+            -d "disable_web_page_preview=true" \
+            -d "parse_mode=html" \
+            -d text="<code>extract . . .</code>"
+            tar -xvzf *.tar.gz
+            rm *.tar.gz
+        - name: Push
+          run: |
+            cd aosp-clang
+            curl -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+            -d chat_id="$CHAT_ID" \
+            -d "disable_web_page_preview=true" \
+            -d "parse_mode=html" \
+            -d text="<code>push . . .</code>"
+            git config --global user.name "TeraaBytee"
+            git config --global user.email "terabyte3766@gmail.com"
+            git add .
+            git commit -sm "aosp-clang: Import clang-$BRANCH" -m "* From: $CLANG_LINK"
+            git branch $BRANCH
+            git push -uf origin main $BRANCH
+        - name: post
+          run: |
+            curl -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+            -d chat_id="$CHAT_ID" \
+            -d "disable_web_page_preview=true" \
+            -d "parse_mode=html" \
+            -d text="<b>clang push to</b>:%0Ahttps://github.com/TeraaBytee/aosp-clang"
