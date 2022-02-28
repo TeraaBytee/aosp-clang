@@ -39,7 +39,7 @@
 .Case("interrupt", true)
 .Case("argument_with_type_tag", true)
 .Case("pointer_with_type_tag", true)
-.Case("__clang_arm_mve_alias", true)
+.Case("__clang_arm_builtin_alias", true)
 .Case("availability", true)
 .Case("blocks", true)
 .Case("guard", true)
@@ -70,6 +70,10 @@
 .Case("interrupt", true)
 .Case("return_typestate", true)
 .Case("set_typestate", true)
+.Case("swift_async", true)
+.Case("swift_error", true)
+.Case("swift_newtype", true)
+.Case("swift_wrapper", true)
 .Case("test_typestate", true)
 .Case("type_tag_for_datatype", true)
 .Case("type_visibility", true)
@@ -90,6 +94,7 @@
 .Case("iboutletcollection", true)
 .Case("Owner", true)
 .Case("Pointer", true)
+.Case("preferred_name", true)
 .Case("vec_type_hint", true)
 #endif // CLANG_ATTR_TYPE_ARG_LIST
 

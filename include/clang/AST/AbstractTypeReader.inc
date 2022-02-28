@@ -45,6 +45,8 @@ public:
       return readDeducedTemplateSpecializationType();
     case Type::DependentAddressSpace:
       return readDependentAddressSpaceType();
+    case Type::DependentExtInt:
+      return readDependentExtIntType();
     case Type::DependentName:
       return readDependentNameType();
     case Type::DependentSizedExtVector:
@@ -55,6 +57,8 @@ public:
       return readDependentVectorType();
     case Type::Elaborated:
       return readElaboratedType();
+    case Type::ExtInt:
+      return readExtIntType();
     case Type::FunctionNoProto:
       return readFunctionNoProtoType();
     case Type::FunctionProto:
@@ -63,6 +67,10 @@ public:
       return readInjectedClassNameType();
     case Type::MacroQualified:
       return readMacroQualifiedType();
+    case Type::ConstantMatrix:
+      return readConstantMatrixType();
+    case Type::DependentSizedMatrix:
+      return readDependentSizedMatrixType();
     case Type::MemberPointer:
       return readMemberPointerType();
     case Type::ObjCObjectPointer:
@@ -226,6 +234,10 @@ public:
       case BuiltinType::ID: return ctx.SINGLETON_ID;
 #include "clang/Basic/AArch64SVEACLETypes.def"
 
+#define PPC_VECTOR_TYPE(NAME, ID, SIZE) \
+      case BuiltinType::ID: return ctx.ID##Ty;
+#include "clang/Basic/PPCTypes.def"
+
 #define BUILTIN_TYPE(ID, SINGLETON_ID) \
       case BuiltinType::ID: return ctx.SINGLETON_ID;
 #include "clang/AST/BuiltinTypes.def"
@@ -286,6 +298,15 @@ public:
     
     return ctx.getDependentAddressSpaceType(pointeeType, addressSpace,
                                             attributeLoc);
+  
+  }
+
+  QualType readDependentExtIntType() {
+    auto &ctx = R.getASTContext();
+    bool isUnsigned = R.find("isUnsigned").readBool();
+    Expr* numBitsExpr = R.find("numBitsExpr").readExprRef();
+    
+    return ctx.getDependentExtIntType(isUnsigned, numBitsExpr);
   
   }
 
@@ -350,6 +371,15 @@ public:
   
   }
 
+  QualType readExtIntType() {
+    auto &ctx = R.getASTContext();
+    bool isUnsigned = R.find("isUnsigned").readBool();
+    uint32_t numBits = R.find("numBits").readUInt32();
+    
+    return ctx.getExtIntType(isUnsigned, numBits);
+  
+  }
+
   QualType readFunctionNoProtoType() {
     auto &ctx = R.getASTContext();
     QualType returnType = R.find("returnType").readQualType();
@@ -360,10 +390,12 @@ public:
     bool producesResult = R.find("producesResult").readBool();
     bool noCallerSavedRegs = R.find("noCallerSavedRegs").readBool();
     bool noCfCheck = R.find("noCfCheck").readBool();
+    bool cmseNSCall = R.find("cmseNSCall").readBool();
     
     auto extInfo = FunctionType::ExtInfo(noReturn, hasRegParm, regParm,
                                          callingConvention, producesResult,
-                                         noCallerSavedRegs, noCfCheck);
+                                         noCallerSavedRegs, noCfCheck,
+                                         cmseNSCall);
     return ctx.getFunctionNoProtoType(returnType, extInfo);
   
   }
@@ -388,10 +420,12 @@ public:
     bool producesResult = R.find("producesResult").readBool();
     bool noCallerSavedRegs = R.find("noCallerSavedRegs").readBool();
     bool noCfCheck = R.find("noCfCheck").readBool();
+    bool cmseNSCall = R.find("cmseNSCall").readBool();
     
     auto extInfo = FunctionType::ExtInfo(noReturn, hasRegParm, regParm,
                                          callingConvention, producesResult,
-                                         noCallerSavedRegs, noCfCheck);
+                                         noCallerSavedRegs, noCfCheck,
+                                         cmseNSCall);
     FunctionProtoType::ExtProtoInfo epi;
     epi.ExtInfo = extInfo;
     epi.Variadic = variadic;
@@ -436,6 +470,27 @@ public:
     IdentifierInfo* macroIdentifier = R.find("macroIdentifier").readIdentifier();
     
     return ctx.getMacroQualifiedType(underlyingType, macroIdentifier);
+  
+  }
+
+  QualType readConstantMatrixType() {
+    auto &ctx = R.getASTContext();
+    uint32_t numRows = R.find("numRows").readUInt32();
+    uint32_t numColumns = R.find("numColumns").readUInt32();
+    QualType elementType = R.find("elementType").readQualType();
+    
+    return ctx.getConstantMatrixType(elementType, numRows, numColumns);
+  
+  }
+
+  QualType readDependentSizedMatrixType() {
+    auto &ctx = R.getASTContext();
+    Expr* rows = R.find("rows").readExprRef();
+    Expr* columns = R.find("columns").readExprRef();
+    SourceLocation attributeLoc = R.find("attributeLoc").readSourceLocation();
+    QualType elementType = R.find("elementType").readQualType();
+    
+    return ctx.getDependentSizedMatrixType(elementType, rows, columns, attributeLoc);
   
   }
 
@@ -494,7 +549,8 @@ public:
     QualType pattern = R.find("pattern").readQualType();
     llvm::Optional<uint32_t> numExpansions = R.find("numExpansions").template readOptional<uint32_t>();
     
-    return ctx.getPackExpansionType(pattern, numExpansions);
+    return ctx.getPackExpansionType(pattern, numExpansions,
+                                    /*ExpectPackInType*/false);
   
   }
 
@@ -568,7 +624,9 @@ public:
     Decl* declaration = R.find("declaration").readDeclRef();
     
     QualType result = ctx.getEnumType(cast<EnumDecl>(declaration));
-    const_cast<Type*>(result.getTypePtr())->setDependent(dependent);
+    if (dependent)
+      const_cast<Type *>(result.getTypePtr())
+          ->addDependence(TypeDependence::DependentInstantiation);
     return result;
   
   }
@@ -580,7 +638,9 @@ public:
     
     auto record = cast<RecordDecl>(declaration);
     QualType result = ctx.getRecordType(record);
-    const_cast<Type*>(result.getTypePtr())->setDependent(dependent);
+    if (dependent)
+      const_cast<Type *>(result.getTypePtr())
+          ->addDependence(TypeDependence::DependentInstantiation);
     return result;
   
   }
@@ -602,7 +662,9 @@ public:
                                                  templateArguments,
                                                  *underlyingType);
     }
-    const_cast<Type*>(result.getTypePtr())->setDependent(dependent);
+    if (dependent)
+      const_cast<Type *>(result.getTypePtr())
+          ->addDependence(TypeDependence::DependentInstantiation);
     return result;
   
   }

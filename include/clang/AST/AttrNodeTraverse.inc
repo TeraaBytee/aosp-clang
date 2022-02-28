@@ -40,6 +40,11 @@
     if (SA->isAlignmentExpr())
       Visit(SA->getAlignmentExpr());
   }
+  void VisitAnnotateAttr(const AnnotateAttr *A) {
+    const auto *SA = cast<AnnotateAttr>(A); (void)SA;
+    for (AnnotateAttr::args_iterator I = SA->args_begin(), E = SA->args_end(); I != E; ++I)
+      Visit(*I);
+  }
   void VisitAssertCapabilityAttr(const AssertCapabilityAttr *A) {
     const auto *SA = cast<AssertCapabilityAttr>(A); (void)SA;
     for (AssertCapabilityAttr::args_iterator I = SA->args_begin(), E = SA->args_end(); I != E; ++I)
@@ -117,8 +122,6 @@
   void VisitOMPDeclareVariantAttr(const OMPDeclareVariantAttr *A) {
     const auto *SA = cast<OMPDeclareVariantAttr>(A); (void)SA;
     Visit(SA->getVariantFuncRef());
-    for (OMPDeclareVariantAttr::scores_iterator I = SA->scores_begin(), E = SA->scores_end(); I != E; ++I)
-      Visit(*I);
   }
   void VisitOMPReferencedVarAttr(const OMPReferencedVarAttr *A) {
     const auto *SA = cast<OMPReferencedVarAttr>(A); (void)SA;
